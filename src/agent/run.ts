@@ -1,25 +1,48 @@
 import { generateText, type ModelMessage } from "ai";
-import { openai } from "@ai-sdk/openai";
-
+import { google } from "@ai-sdk/google";
+import { Laminar, observe } from "@lmnr-ai/lmnr";
 import { tools } from "./tools/index.ts";
 import { SYSTEM_PROMPT } from "./system/prompt.ts";
 
 import type { AgentCallbacks } from "../types.ts";
 
-const MODEL_NAME = "gpt-5-mini";
+const MODEL_NAME = "gemini-3.8-flash";
+
+if (process.env.LMNR_PROJECT_API_KEY) {
+  try {
+    Laminar.initialize({ projectApiKey: process.env.LMNR_PROJECT_API_KEY });
+  } catch (error) {
+    console.warn(
+      "Laminar initialization failed, continuing without tracing:",
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
 
 export async function runAgent(
   userMessage: string,
   conversationHistory: ModelMessage[],
   callbacks: AgentCallbacks,
 ): Promise<any> {
-  // Filter and check if we need to compact the conversation history before starting
-  const { text } = await generateText({
-    model: openai(MODEL_NAME),
-    prompt: userMessage,
-    system: SYSTEM_PROMPT,
-    tools,
-  });
+  const { text } = await observe({ name: "run-agent" }, () =>
+    generateText({
+      model: google(MODEL_NAME),
+      prompt: userMessage,
+      system: SYSTEM_PROMPT,
+      tools,
+    }),
+  );
 
-  console.log(text);
+  try {
+    await Laminar.flush();
+  } catch (error) {
+    // Tracing should never break the agent. A bad/expired LMNR key
+    // surfaces here as `16 UNAUTHENTICATED` — log it and keep going.
+    console.warn(
+      "Laminar flush failed, continuing without tracing:",
+      error instanceof Error ? error.message : error,
+    );
+  }
+
+  return text;
 }

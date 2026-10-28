@@ -22,6 +22,7 @@ export async function executeTool(
   const result = await execute(args as any, {
     toolCallId: "",
     messages: [],
+    context: {},
   });
 
   return String(result);

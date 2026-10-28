@@ -1,13 +1,28 @@
-import { generateObject } from "ai";
-import { openai } from "@ai-sdk/openai";
-import { z } from "zod";
+import type { EvalTarget, SingleTurnResult } from "./types.ts";
 
-import type {
-  EvalTarget,
-  SingleTurnResult,
-  MultiTurnTarget,
-  MultiTurnResult,
-} from "./types.ts";
+/** Golden prompts pass when all expected tools are selected. */
+export function toolsSelected(
+	output: SingleTurnResult,
+	target: EvalTarget,
+): number {
+	return (target.expectedTools ?? []).every((name) =>
+		output.toolNames.includes(name),
+	)
+		? 1
+		: 0;
+}
+
+/** Negative prompts pass when no forbidden tools are selected. */
+export function toolsAvoided(
+	output: SingleTurnResult,
+	target: EvalTarget,
+): number {
+	return (target.forbiddenTools ?? []).every(
+		(name) => !output.toolNames.includes(name),
+	)
+		? 1
+		: 0;
+}
 
 /**
  * Evaluator: Precision/recall score for tool selection.
@@ -15,21 +30,21 @@ import type {
  * For secondary prompts.
  */
 export function toolSelectionScore(
-  output: SingleTurnResult,
-  target: EvalTarget,
+	output: SingleTurnResult,
+	target: EvalTarget,
 ): number {
-  if (!target.expectedTools?.length) {
-    return output.selectedAny ? 0.5 : 1;
-  }
+	if (!target.expectedTools?.length) {
+		return output.selectedAny ? 0.5 : 1;
+	}
 
-  const expected = new Set(target.expectedTools);
-  const selected = new Set(output.toolNames);
+	const expected = new Set(target.expectedTools);
+	const selected = new Set(output.toolNames);
 
-  const hits = output.toolNames.filter((t) => expected.has(t)).length;
-  const precision = selected.size > 0 ? hits / selected.size : 0;
-  const recall = expected.size > 0 ? hits / expected.size : 0;
+	const hits = [...selected].filter((t) => expected.has(t)).length;
+	const precision = selected.size > 0 ? hits / selected.size : 0;
+	const recall = expected.size > 0 ? hits / expected.size : 0;
 
-  // Simple F1-ish score
-  if (precision + recall === 0) return 0;
-  return (2 * precision * recall) / (precision + recall);
+	// Simple F1-ish score
+	if (precision + recall === 0) return 0;
+	return (2 * precision * recall) / (precision + recall);
 }
